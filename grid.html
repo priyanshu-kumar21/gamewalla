@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lights Out Puzzle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slideIn {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+            50% { transform: scale(1.1); box-shadow: 0 0 0 12px rgba(59, 130, 246, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .animate-pulse:hover {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes tileToggle {
+            0% { transform: scale(0.9); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .animate-tileToggle {
+            animation: tileToggle 0.2s ease-out;
+        }
+        button:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        .bg-particle {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-particle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%);
+            animation: particleFade 3s infinite;
+        }
+        @keyframes particleFade {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.15); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-particle flex items-center justify-center p-4">
+    <div class="bg-white bg-opacity-90 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 w-full max-w-md animate-slideIn">
+        <h1 class="text-4xl font-extrabold text-center text-gray-900 mb-4 tracking-tight drop-shadow-lg">Lights Out Puzzle</h1>
+        <p class="text-center text-gray-600 mb-6">Click tiles to turn all lights on!</p>
+        <div class="flex justify-between items-center mb-4">
+            <div class="text-lg font-semibold text-gray-700">Moves: <span id="moves">0</span></div>
+            <button onclick="resetGame()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-indigo-700 transition-colors duration-300 shadow-lg" aria-label="Reset Game">Reset</button>
+        </div>
+        <div id="gameBoard" class="grid grid-cols-3 gap-2 mb-6"></div>
+        <div id="winMessage" class="text-center text-2xl font-semibold text-green-600 hidden">You Won!</div>
+    </div>
+
+    <script>
+        const gridSize = 3;
+        let board = [];
+        let moves = 0;
+        let gameWon = false;
+
+        function initializeBoard() {
+            board = [];
+            for (let i = 0; i < gridSize; i++) {
+                const row = [];
+                for (let j = 0; j < gridSize; j++) {
+                    row.push(Math.random() > 0.5); // Randomly on (true) or off (false)
+                }
+                board.push(row);
+            }
+            moves = 0;
+            gameWon = false;
+            renderBoard();
+            updateMoves();
+            document.getElementById('winMessage').classList.add('hidden');
+        }
+
+        function renderBoard() {
+            const boardElement = document.getElementById('gameBoard');
+            boardElement.innerHTML = '';
+            board.forEach((row, i) => {
+                row.forEach((state, j) => {
+                    const tile = document.createElement('div');
+                    tile.className = `w-16 h-16 sm:w-20 sm:h-20 rounded-lg cursor-pointer transition-colors duration-200 ${state ? 'bg-blue-500 shadow-lg' : 'bg-gray-300'}`;
+                    tile.setAttribute('aria-label', `Tile at row ${i + 1}, column ${j + 1}, ${state ? 'on' : 'off'}`);
+                    tile.addEventListener('click', () => toggleTile(i, j));
+                    boardElement.appendChild(tile);
+                });
+            });
+        }
+
+        function toggleTile(i, j) {
+            if (gameWon) return;
+            moves++;
+            // Toggle clicked tile
+            board[i][j] = !board[i][j];
+            // Toggle adjacent tiles
+            if (i > 0) board[i - 1][j] = !board[i - 1][j]; // Up
+            if (i < gridSize - 1) board[i + 1][j] = !board[i + 1][j]; // Down
+            if (j > 0) board[i][j - 1] = !board[i][j - 1]; // Left
+            if (j < gridSize - 1) board[i][j + 1] = !board[i][j + 1]; // Right
+
+            // Animate toggled tiles
+            const tiles = document.getElementById('gameBoard').children;
+            const indices = [
+                i * gridSize + j,
+                i > 0 ? (i - 1) * gridSize + j : -1,
+                i < gridSize - 1 ? (i + 1) * gridSize + j : -1,
+                j > 0 ? i * gridSize + (j - 1) : -1,
+                j < gridSize - 1 ? i * gridSize + (j + 1) : -1
+            ].filter(idx => idx >= 0);
+            indices.forEach(idx => {
+                tiles[idx].classList.add('animate-tileToggle');
+                setTimeout(() => tiles[idx].classList.remove('animate-tileToggle'), 200);
+            });
+
+            renderBoard();
+            updateMoves();
+            checkWin();
+        }
+
+        function updateMoves() {
+            document.getElementById('moves').textContent = moves;
+        }
+
+        function checkWin() {
+            const allOn = board.every(row => row.every(state => state));
+            if (allOn) {
+                gameWon = true;
+                document.getElementById('winMessage').classList.remove('hidden');
+                confetti({
+                    particleCount: 250,
+                    spread: 120,
+                    origin: { y: 0.6 },
+                    colors: ['#3b82f6', '#8b5cf6', '#ec4899']
+                });
+            }
+        }
+
+        function resetGame() {
+            initializeBoard();
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (gameWon) return;
+            const keyMap = {
+                'ArrowUp': { di: -1, dj: 0 },
+                'ArrowDown': { di: 1, dj: 0 },
+                'ArrowLeft': { di: 0, dj: -1 },
+                'ArrowRight': { di: 0, dj: 1 },
+                'Enter': { di: 0, dj: 0 }
+            };
+            if (keyMap[e.key]) {
+                e.preventDefault();
+                const focused = document.activeElement;
+                let i = -1, j = -1;
+                if (focused && focused.getAttribute('aria-label')) {
+                    const match = focused.getAttribute('aria-label').match(/row (\d), column (\d)/);
+                    if (match) {
+                        i = parseInt(match[1]) - 1;
+                        j = parseInt(match[2]) - 1;
+                    }
+                }
+                if (i === -1 || j === -1) {
+                    i = Math.floor(gridSize / 2);
+                    j = Math.floor(gridSize / 2);
+                } else {
+                    i = (i + keyMap[e.key].di + gridSize) % gridSize;
+                    j = (j + keyMap[e.key].dj + gridSize) % gridSize;
+                }
+                if (e.key === 'Enter') {
+                    toggleTile(i, j);
+                } else {
+                    const tile = document.getElementById('gameBoard').children[i * gridSize + j];
+                    tile.focus();
+                }
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                resetGame();
+            }
+        });
+
+        // Initialize the game
+        initializeBoard();
+    </script>
+</body>
+</html>

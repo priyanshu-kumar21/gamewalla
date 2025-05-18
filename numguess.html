@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Guessing Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slideIn {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .animate-pulse:hover {
+            animation: pulse 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
+    <div class="bg-white bg-opacity-90 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md animate-slideIn">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-4">Number Guessing Game</h1>
+        <p class="text-center text-gray-600 mb-6">Guess a number between 1 and 100</p>
+        <div class="flex flex-col items-center gap-4">
+            <input type="number" id="guessInput" min="1" max="100" placeholder="Enter your guess"
+                   class="w-full max-w-xs p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition-all duration-300"
+                   onfocus="this.classList.add('ring-indigo-400')" onblur="this.classList.remove('ring-indigo-400')">
+            <button onclick="checkGuess()"
+                    class="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors duration-300 animate-pulse">
+                Submit Guess
+            </button>
+        </div>
+        <div id="message" class="mt-6 text-center text-lg min-h-[1.5em] text-gray-700"></div>
+        <div id="attempts" class="mt-2 text-center text-gray-500">Attempts: 0</div>
+    </div>
+
+    <script>
+        let targetNumber = Math.floor(Math.random() * 100) + 1;
+        let attempts = 0;
+
+        function checkGuess() {
+            const guessInput = document.getElementById('guessInput');
+            const message = document.getElementById('message');
+            const attemptsDisplay = document.getElementById('attempts');
+            const guess = parseInt(guessInput.value);
+
+            if (isNaN(guess) || guess < 1 || guess > 100) {
+                message.textContent = 'Please enter a number between 1 and 100!';
+                message.classList.remove('text-green-600', 'font-bold');
+                message.classList.add('text-red-500');
+                return;
+            }
+
+            attempts++;
+            attemptsDisplay.textContent = `Attempts: ${attempts}`;
+
+            if (guess === targetNumber) {
+                message.classList.remove('text-red-500');
+                message.classList.add('text-green-600', 'font-bold');
+                message.textContent = `Congratulations! You guessed ${targetNumber} in ${attempts} attempts!`;
+                guessInput.disabled = true;
+                document.querySelector('button').disabled = true;
+                triggerConfetti();
+            } else if (guess < targetNumber) {
+                message.classList.remove('text-green-600', 'font-bold');
+                message.classList.add('text-red-500');
+                message.textContent = 'Too low! Try a higher number.';
+            } else {
+                message.classList.remove('text-green-600', 'font-bold');
+                message.classList.add('text-red-500');
+                message.textContent = 'Too high! Try a lower number.';
+            }
+
+            guessInput.value = '';
+            guessInput.focus();
+        }
+
+        function triggerConfetti() {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#4f46e5', '#c084fc', '#ec4899']
+            });
+        }
+
+        document.getElementById('guessInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkGuess();
+            }
+        });
+    </script>
+</body>
+</html>

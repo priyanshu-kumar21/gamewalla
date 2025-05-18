@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idle Clicker Mania</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-confetti@0.12.0/dist/js-confetti.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Roboto:wght@400;500&display=swap');
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1E1B2E 0%, #2A2A6E 100%);
+            overflow: hidden;
+        }
+        #click-button {
+            position: relative;
+            transition: transform 0.1s ease;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+            animation: pulse 2s infinite;
+        }
+        #click-button:active {
+            transform: scale(0.95);
+        }
+        .ripple {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: ripple 0.6s ease-out;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.8); }
+            100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        }
+        @keyframes ripple {
+            to { transform: scale(2); opacity: 0; }
+        }
+        .upgrade-button {
+            transition: transform 0.2s ease, box-shadow 0.3s ease;
+            background: linear-gradient(45deg, #4B3F72, #6B5CA5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .upgrade-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(45deg, #5B4F92, #7B6CB5);
+        }
+        .upgrade-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #game-container {
+            backdrop-filter: blur(12px);
+            background: rgba(30, 27, 46, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        #title {
+            font-family: 'Orbitron', sans-serif;
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+        }
+        #progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        #progress-fill {
+            background: linear-gradient(90deg, #3B82F6, #EC4899);
+            transition: width 0.3s ease;
+        }
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #EC4899;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particle 1s ease-out;
+        }
+        @keyframes particle {
+            to { transform: translateY(-50px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <h1 id="title" class="text-4xl md:text-5xl font-bold text-blue-400 mb-6">
+        Idle Clicker Mania
+    </h1>
+    <div id="game-container" class="flex flex-col md:flex-row gap-8 p-8 rounded-2xl shadow-2xl max-w-5xl w-full">
+        <div class="flex flex-col items-center">
+            <div id="score" class="text-3xl font-semibold text-blue-300 mb-4">
+                Points: <span id="points">0</span>
+            </div>
+            <button id="click-button" class="w-36 h-36 md:w-48 md:h-48 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold relative overflow-hidden">
+                Click!
+            </button>
+            <div id="cps" class="mt-4 text-lg text-blue-300">
+                CPS: <span id="cps-value">0</span>
+            </div>
+            <div id="progress-bar" class="w-48 h-4 mt-4 rounded-full overflow-hidden">
+                <div id="progress-fill" class="h-full rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+        <div class="flex-1">
+            <h2 class="text-2xl font-semibold text-blue-300 mb-4">Upgrade Shop</h2>
+            <div id="upgrades" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Upgrades will be added by JavaScript -->
+            </div>
+        </div>
+    </div>
+    <div id="message" class="mt-6 text-2xl font-semibold text-blue-300"></div>
+
+    <script>
+        const confetti = new JSConfetti();
+        const clickSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2568/2568.wav'], volume: 0.3 });
+        const upgradeSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2582/2582.wav'], volume: 0.3 });
+        let points = 0;
+        let clicksPerSecond = 0;
+        let pointsPerClick = 1;
+        const milestone = 1000;
+
+        const upgrades = [
+            { id: 'click-power', name: 'Click Power', baseCost: 10, cost: 10, increase: 1, type: 'click', level: 0 },
+            { id: 'auto-clicker', name: 'Auto Clicker', baseCost: 50, cost: 50, increase: 0.1, type: 'cps', level: 0 },
+            { id: 'super-click', name: 'Super Click', baseCost: 100, cost: 100, increase: 5, type: 'click', level: 0 },
+            { id: 'mega-auto', name: 'Mega Auto', baseCost: 500, cost: 500, increase: 1, type: 'cps', level: 0 },
+        ];
+
+        const elements = {
+            points: document.getElementById('points'),
+            cps: document.getElementById('cps-value'),
+            clickButton: document.getElementById('click-button'),
+            upgradesContainer: document.getElementById('upgrades'),
+            message: document.getElementById('message'),
+            progressFill: document.getElementById('progress-fill'),
+        };
+
+        function updateDisplay() {
+            elements.points.textContent = Math.floor(points);
+            elements.cps.textContent = clicksPerSecond.toFixed(1);
+            elements.progressFill.style.width = `${Math.min((points / milestone) * 100, 100)}%`;
+            upgrades.forEach(upgrade => {
+                const button = document.getElementById(`upgrade-${upgrade.id}`);
+                button.innerHTML = `
+                    <div class="flex justify-between">
+                        <span>${upgrade.name} (Lv. ${upgrade.level})</span>
+                        <span>${Math.floor(upgrade.cost)} Pts</span>
+                    </div>
+                `;
+                button.disabled = points < upgrade.cost;
+            });
+        }
+
+        function initializeUpgrades() {
+            elements.upgradesContainer.innerHTML = '';
+            upgrades.forEach(upgrade => {
+                const button = document.createElement('button');
+                button.id = `upgrade-${upgrade.id}`;
+                button.classList.add('upgrade-button', 'w-full', 'p-4', 'text-white', 'font-semibold', 'rounded-lg', 'text-left');
+                button.addEventListener('click', () => buyUpgrade(upgrade));
+                elements.upgradesContainer.appendChild(button);
+                gsap.from(button, { y: 20, opacity: 0, duration: 0.5, delay: upgrade.level * 0.1 });
+            });
+            updateDisplay();
+        }
+
+        function buyUpgrade(upgrade) {
+            if (points >= upgrade.cost) {
+                points -= upgrade.cost;
+                upgrade.level++;
+                if (upgrade.type === 'click') {
+                    pointsPerClick += upgrade.increase;
+                } else if (upgrade.type === 'cps') {
+                    clicksPerSecond += upgrade.increase;
+                }
+                upgrade.cost = upgrade.baseCost * Math.pow(1.15, upgrade.level);
+                upgradeSound.play();
+                gsap.to(`#upgrade-${upgrade.id}`, { scale: 1.1, duration: 0.1, yoyo: true, repeat: 1 });
+                updateDisplay();
+            }
+        }
+
+        function createRipple(e) {
+            const ripple = document.createElement('div');
+            ripple.classList.add('ripple');
+            const rect = elements.clickButton.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            ripple.style.width = ripple.style.height = `${size}px`;
+            ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+            ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+            elements.clickButton.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
+
+        function createParticles() {
+            for (let i = 0; i < 5; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                const rect = elements.clickButton.getBoundingClientRect();
+                particle.style.left = `${rect.left + rect.width / 2}px`;
+                particle.style.top = `${rect.top + rect.height / 2}px`;
+                document.body.appendChild(particle);
+                gsap.to(particle, {
+                    x: (Math.random() - 0.5) * 100,
+                    y: -50 - Math.random() * 50,
+                    opacity: 0,
+                    duration: 1,
+                    onComplete: () => particle.remove(),
+                });
+            }
+        }
+
+        function handleClick(e) {
+            points += pointsPerClick;
+            clickSound.play();
+            createRipple(e);
+            createParticles();
+            checkMilestone();
+            updateDisplay();
+        }
+
+        function checkMilestone() {
+            if (points >= milestone && !elements.message.textContent) {
+                elements.message.textContent = 'Milestone Reached! Epic!';
+                elements.message.classList.add('text-yellow-400');
+                confetti.addConfetti({
+                    confettiColors: ['#3B82F6', '#EC4899', '#FBBF24', '#10B981'],
+                    confettiRadius: 6,
+                    confettiNumber: 200,
+                });
+            }
+        }
+
+        elements.clickButton.addEventListener('click', handleClick);
+
+        // Auto-clicker logic
+        setInterval(() => {
+            points += clicksPerSecond;
+            checkMilestone();
+            updateDisplay();
+        }, 1000);
+
+        // Initialize game
+        initializeUpgrades();
+        gsap.from('#title', { opacity: 0, y: -50, duration: 1 });
+        gsap.from('#game-container', { opacity: 0, scale: 0.8, duration: 1, delay: 0.2 });
+    </script>
+</body>
+</html>

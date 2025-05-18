@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Battle Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-confetti@0.12.0/dist/js-confetti.browser.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Roboto:wght@400;500&display=swap');
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1E1B2E 0%, #2A2A6E 100%);
+            overflow: hidden;
+        }
+        .card {
+            transition: transform 0.2s ease, box-shadow 0.3s ease;
+            background: linear-gradient(45deg, #4B3F72, #6B5CA5);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .card:hover:not(.disabled) {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+        .card.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #game/container {
+            backdrop-filter: blur(12px);
+            background: rgba(30, 27, 46, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        #title {
+            font-family: 'Orbitron', sans-serif;
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+        }
+        .health-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .health-fill {
+            background: linear-gradient(90deg, #EC4899, #3B82F6);
+            transition: width 0.5s ease;
+        }
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #EC4899;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particle 1s ease-out;
+        }
+        @keyframes particle {
+            to { transform: translateY(-60px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <h1 id="title" class="text-4xl md:text-5xl font-bold text-blue-400 mb-6">Card Battle Arena</h1>
+    <div id="game-container" class="flex flex-col md:flex-row gap-8 p-8 rounded-2xl shadow-2xl max-w-5xl w-full">
+        <!-- Player Section -->
+        <div class="flex-1 flex flex-col items-center">
+            <h2 class="text-2xl font-semibold text-blue-300 mb-4">Player</h2>
+            <div class="w-64 h-6 rounded-full health-bar mb-4">
+                <div id="player-health" class="health-fill h-full rounded-full" style="width: 100%"></div>
+            </div>
+            <div id="player-hp" class="text-lg text-blue-300 mb-4">HP: 100/100</div>
+            <div id="player-cards" class="grid grid-cols-3 gap-4">
+                <!-- Player cards will be added by JavaScript -->
+            </div>
+        </div>
+        <!-- Versus Divider -->
+        <div class="flex items-center justify-center">
+            <span class="text-3xl font-bold text-blue-400">VS</span>
+        </div>
+        <!-- AI Section -->
+        <div class="flex-1 flex flex-col items-center">
+            <h2 class="text-2xl font-semibold text-blue-300 mb-4">AI Opponent</h2>
+            <div class="w-64 h-6 rounded-full health-bar mb-4">
+                <div id="ai-health" class="health-fill h-full rounded-full" style="width: 100%"></div>
+            </div>
+            <div id="ai-hp" class="text-lg text-blue-300 mb-4">HP: 100/100</div>
+            <div id="ai-cards" class="grid grid-cols-3 gap-4">
+                <!-- AI cards will be added by JavaScript -->
+            </div>
+        </div>
+    </div>
+    <div id="turn" class="mt-6 text-2xl font-semibold text-blue-300">Your Turn</div>
+    <div id="message" class="mt-4 text-2xl font-semibold text-yellow-400"></div>
+    <button id="restart-button" class="mt-6 px-6 py-3 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 hover:shadow-lg transition-all duration-300 hidden">
+        Restart Game
+    </button>
+
+    <script>
+        const confetti = new JSConfetti();
+        const attackSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2568/2568.wav'], volume: 0.3 });
+        const healSound = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2582/2582.wav'], volume: 0.3 });
+
+        const cards = [
+            { id: 'light-attack', name: 'Light Attack', effect: 'damage', value: 10 },
+            { id: 'heavy-attack', name: 'Heavy Attack', effect: 'damage', value: 20 },
+            { id: 'heal', name: 'Heal', effect: 'heal', value: 15 },
+            { id: 'quick-strike', name: 'Quick Strike', effect: 'damage', value: 5 },
+            { id: 'restore', name: 'Restore', effect: 'heal', value: 10 },
+        ];
+
+        let gameState = {
+            playerHP: 100,
+            aiHP: 100,
+            playerCards: [...cards],
+            aiCards: [...cards],
+            isPlayerTurn: true,
+            gameOver: false,
+        };
+
+        const elements = {
+            playerHealth: document.getElementById('player-health'),
+            aiHealth: document.getElementById('ai-health'),
+            playerHP: document.getElementById('player-hp'),
+            aiHP: document.getElementById('ai-hp'),
+            playerCards: document.getElementById('player-cards'),
+            aiCards: document.getElementById('ai-cards'),
+            turn: document.getElementById('turn'),
+            message: document.getElementById('message'),
+            restartButton: document.getElementById('restart-button'),
+        };
+
+        function initializeGame() {
+            gameState = {
+                playerHP: 100,
+                aiHP: 100,
+                playerCards: [...cards],
+                aiCards: [...cards],
+                isPlayerTurn: true,
+                gameOver: false,
+            };
+            elements.message.textContent = '';
+            elements.restartButton.classList.add('hidden');
+            elements.turn.textContent = 'Your Turn';
+            updateHealthBars();
+            renderCards();
+            gsap.from('#title', { opacity: 0, y: -50, duration: 1 });
+            gsap.from('#game-container', { opacity: 0, scale: 0.8, duration: 1, delay: 0.2 });
+        }
+
+        function updateHealthBars() {
+            elements.playerHealth.style.width = `${(gameState.playerHP / 100) * 100}%`;
+            elements.aiHealth.style.width = `${(gameState.aiHP / 100) * 100}%`;
+            elements.playerHP.textContent = `HP: ${Math.max(0, gameState.playerHP)}/100`;
+            elements.aiHP.textContent = `HP: ${Math.max(0, gameState.aiHP)}/100`;
+        }
+
+        function renderCards() {
+            elements.playerCards.innerHTML = '';
+            elements.aiCards.innerHTML = '';
+
+            gameState.playerCards.forEach((card, index) => {
+                const cardElement = document.createElement('button');
+                cardElement.classList.add('card', 'p-4', 'text-white', 'font-semibold', 'rounded-lg', 'text-left');
+                if (!gameState.isPlayerTurn || gameState.gameOver) {
+                    cardElement.classList.add('disabled');
+                }
+                cardElement.innerHTML = `
+                    <div class="text-lg">${card.name}</div>
+                    <div class="text-sm">${card.effect === 'damage' ? 'Damage' : 'Heal'}: ${card.value}</div>
+                `;
+                cardElement.addEventListener('click', () => playCard(index, 'player'));
+                elements.playerCards.appendChild(cardElement);
+                gsap.from(cardElement, { y: 20, opacity: 0, duration: 0.5, delay: index * 0.1 });
+            });
+
+            gameState.aiCards.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('card', 'p-4', 'text-white', 'font-semibold', 'rounded-lg', 'text-left', 'disabled');
+                cardElement.innerHTML = `
+                    <div class="text-lg">${card.name}</div>
+                    <div class="text-sm">${card.effect === 'damage' ? 'Damage' : 'Heal'}: ${card.value}</div>
+                `;
+                elements.aiCards.appendChild(cardElement);
+                gsap.from(cardElement, { y: 20, opacity: 0, duration: 0.5, delay: index * 0.1 });
+            });
+        }
+
+        function playCard(index, type) {
+            if (gameState.gameOver || (type === 'player' && !gameState.isPlayerTurn) || (type === 'ai' && gameState.isPlayerTurn)) return;
+
+            const card = type === 'player' ? gameState.playerCards[index] : gameState.aiCards[index];
+            if (!card) return;
+
+            if (card.effect === 'damage') {
+                if (type === 'player') {
+                    gameState.aiHP = Math.max(0, gameState.aiHP - card.value);
+                    attackSound.play();
+                    createParticles(elements.aiCards);
+                } else {
+                    gameState.playerHP = Math.max(0, gameState.playerHP - card.value);
+                    attackSound.play();
+                    createParticles(elements.playerCards);
+                }
+            } else if (card.effect === 'heal') {
+                if (type === 'player') {
+                    gameState.playerHP = Math.min(100, gameState.playerHP + card.value);
+                    healSound.play();
+                    createParticles(elements.playerCards);
+                } else {
+                    gameState.aiHP = Math.min(100, gameState.aiHP + card.value);
+                    healSound.play();
+                    createParticles(elements.aiCards);
+                }
+            }
+
+            // Remove the played card
+            if (type === 'player') {
+                gameState.playerCards.splice(index, 1);
+            } else {
+                gameState.aiCards.splice(index, 1);
+            }
+
+            updateHealthBars();
+            renderCards();
+            checkGameOver();
+
+            if (!gameState.gameOver && type === 'player') {
+                gameState.isPlayerTurn = false;
+                elements.turn.textContent = 'AI Turn';
+                setTimeout(aiTurn, 1000);
+            } else if (!gameState.gameOver) {
+                gameState.isPlayerTurn = true;
+                elements.turn.textContent = 'Your Turn';
+            }
+        }
+
+        function aiTurn() {
+            if (gameState.gameOver || gameState.aiCards.length === 0) return;
+
+            // Simple AI: Prioritize healing if low HP, otherwise random attack/heal
+            const aiLowHP = gameState.aiHP < 40;
+            const availableCards = gameState.aiCards.map((card, index) => ({ card, index }));
+            const healCards = availableCards.filter(c => c.card.effect === 'heal' && gameState.aiHP < 100);
+            const attackCards = availableCards.filter(c => c.card.effect === 'damage');
+
+            let chosenCard;
+            if (aiLowHP && healCards.length > 0) {
+                chosenCard = healCards[Math.floor(Math.random() * healCards.length)];
+            } else {
+                chosenCard = availableCards[Math.floor(Math.random() * availableCards.length)];
+            }
+
+            playCard(chosenCard.index, 'ai');
+        }
+
+        function checkGameOver() {
+            if (gameState.playerHP <= 0) {
+                gameState.gameOver = true;
+                elements.message.textContent = 'Defeat! AI Wins!';
+                elements.turn.textContent = '';
+                elements.restartButton.classList.remove('hidden');
+            } else if (gameState.aiHP <= 0) {
+                gameState.gameOver = true;
+                elements.message.textContent = 'Victory! You Win!';
+                elements.turn.textContent = '';
+                elements.restartButton.classList.remove('hidden');
+                confetti.addConfetti({
+                    confettiColors: ['#3B82F6', '#EC4899', '#FBBF24', '#10B981'],
+                    confettiRadius: 6,
+                    confettiNumber: 200,
+                });
+            } else if (gameState.playerCards.length === 0 && gameState.aiCards.length === 0) {
+                gameState.gameOver = true;
+                elements.message.textContent = 'Draw! No Cards Left!';
+                elements.turn.textContent = '';
+                elements.restartButton.classList.remove('hidden');
+            }
+        }
+
+        function createParticles(container) {
+            for (let i = 0; i < 8; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                const rect = container.getBoundingClientRect();
+                particle.style.left = `${rect.left + rect.width / 2}px`;
+                particle.style.top = `${rect.top + rect.height / 2}px`;
+                document.body.appendChild(particle);
+                gsap.to(particle, {
+                    x: (Math.random() - 0.5) * 120,
+                    y: -60 - Math.random() * 60,
+                    opacity: 0,
+                    duration: 1,
+                    onComplete: () => particle.remove(),
+                });
+            }
+        }
+
+        elements.restartButton.addEventListener('click', initializeGame);
+
+        // Initialize game
+        initializeGame();
+    </script>
+</body>
+</html>

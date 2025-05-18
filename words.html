@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Unscramble Puzzle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slideIn {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            50% { transform: scale(1.1); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .animate-pulse:hover {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes letterPop {
+            0% { transform: scale(0.7); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .letter-pop {
+            animation: letterPop 0.2s ease-out forwards;
+        }
+        button:focus, input:focus {
+            outline: 2px solid #10b981;
+            outline-offset: 2px;
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .bg-particle {
+            background: linear-gradient(135deg, #10b981, #06b6d4, #7c3aed);
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-particle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%);
+            animation: particleFade 3s infinite;
+        }
+        @keyframes particleFade {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.15); }
+        }
+        .error-shake {
+            animation: shake 0.3s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-particle flex items-center justify-center p-4">
+    <div class="bg-white bg-opacity-90 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 w-full max-w-lg animate-slideIn">
+        <h1 class="text-4xl font-extrabold text-center text-gray-900 mb-4 tracking-tight drop-shadow-lg">Word Unscramble Puzzle</h1>
+        <div id="gameScreen">
+            <div class="flex justify-between items-center mb-4">
+                <div class="text-lg font-semibold text-gray-700">Score: <span id="score">0</span></div>
+                <div class="text-lg font-semibold text-gray-700">Word <span id="wordNumber">1</span>/5</div>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-6">
+                <div id="progressBar" class="bg-emerald-500 h-3 rounded-full progress-bar" style="width: 20%"></div>
+            </div>
+            <div id="scrambledWord" class="text-3xl font-bold text-center text-gray-800 mb-4 flex justify-center gap-2"></div>
+            <div id="hint" class="text-center text-gray-600 mb-4 italic hidden"></div>
+            <div class="flex flex-col items-center gap-4 mb-6">
+                <input type="text" id="guessInput" placeholder="Enter your guess" class="w-full max-w-xs p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none transition-all duration-300 bg-gray-50 shadow-md" aria-label="Guess input">
+                <div class="flex gap-4">
+                    <button onclick="checkGuess()" class="bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-emerald-700 transition-colors duration-300 animate-pulse shadow-lg" aria-label="Submit Guess">Submit</button>
+                    <button onclick="getHint()" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors duration-300 shadow-lg" aria-label="Get Hint">Hint (-3 points)</button>
+                </div>
+            </div>
+            <div class="flex justify-center">
+                <button onclick="skipWord()" class="bg-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-700 transition-colors duration-300 shadow-lg" aria-label="Skip Word">Skip</button>
+            </div>
+        </div>
+        <div id="summaryScreen" class="hidden">
+            <h2 class="text-2xl font-semibold text-center text-gray-900 mb-4 drop-shadow-lg">Game Summary</h2>
+            <div id="summary" class="text-lg text-gray-700 mb-6"></div>
+            <div class="flex justify-center">
+                <button onclick="startNewGame()" class="bg-emerald-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-emerald-700 transition-colors duration-300 animate-pulse shadow-lg" aria-label="Play Again">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const words = [
+            { word: "APPLE", hint: "A common fruit" },
+            { word: "HOUSE", hint: "A place to live" },
+            { word: "TIGER", hint: "A large wild cat" },
+            { word: "RIVER", hint: "A flowing body of water" },
+            { word: "CLOUD", hint: "A visible mass in the sky" }
+        ];
+
+        let currentWord = 0;
+        let score = 0;
+        let hintUsed = false;
+        let results = [];
+
+        function scrambleWord(word) {
+            let letters = word.split('');
+            let scrambled;
+            do {
+                for (let i = letters.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [letters[i], letters[j]] = [letters[j], letters[i]];
+                }
+                scrambled = letters.join('');
+            } while (scrambled === word); // Ensure scrambled word isn't the original
+            return scrambled;
+        }
+
+        function displayScrambledWord(scrambled) {
+            const container = document.getElementById('scrambledWord');
+            container.innerHTML = '';
+            scrambled.split('').forEach((letter, index) => {
+                const span = document.createElement('span');
+                span.textContent = letter;
+                span.className = 'letter-pop bg-emerald-100 px-2 py-1 rounded-md shadow-sm font-mono';
+                span.style.animationDelay = `${index * 0.1}s`;
+                container.appendChild(span);
+            });
+        }
+
+        function startNewGame() {
+            currentWord = 0;
+            score = 0;
+            results = [];
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('summaryScreen').classList.add('hidden');
+            loadWord();
+        }
+
+        function loadWord() {
+            const wordData = words[currentWord];
+            hintUsed = false;
+            document.getElementById('wordNumber').textContent = currentWord + 1;
+            document.getElementById('score').textContent = score;
+            document.getElementById('progressBar').style.width = `${(currentWord + 1) * 20}%`;
+            const scrambled = scrambleWord(wordData.word);
+            displayScrambledWord(scrambled);
+            document.getElementById('hint').classList.add('hidden');
+            document.getElementById('hint').textContent = '';
+            document.getElementById('guessInput').value = '';
+            document.getElementById('guessInput').classList.remove('error-shake', 'border-red-500');
+            document.getElementById('guessInput').focus();
+        }
+
+        function checkGuess() {
+            const guessInput = document.getElementById('guessInput');
+            const guess = guessInput.value.trim().toUpperCase();
+            const hint = document.getElementById('hint');
+            const correctWord = words[currentWord].word;
+            const points = hintUsed ? 7 : 10;
+
+            if (!guess) {
+                hint.textContent = 'Please enter a guess!';
+                hint.classList.remove('hidden', 'italic');
+                hint.classList.add('text-red-500');
+                guessInput.classList.add('error-shake', 'border-red-500');
+                setTimeout(() => guessInput.classList.remove('error-shake'), 300);
+                return;
+            }
+
+            hint.classList.add('hidden');
+            hint.classList.remove('text-red-500');
+            hint.classList.add('italic');
+            guessInput.classList.remove('border-red-500');
+
+            if (guess === correctWord) {
+                score += points;
+                results.push({ word: correctWord, guess, hintUsed, status: 'Correct', points });
+            } else {
+                results.push({ word: correctWord, guess, hintUsed, status: 'Incorrect', points: 0 });
+            }
+
+            currentWord++;
+            if (currentWord < words.length) {
+                loadWord();
+            } else {
+                showSummary();
+            }
+        }
+
+        function getHint() {
+            if (hintUsed) return;
+            hintUsed = true;
+            score = Math.max(0, score - 3);
+            document.getElementById('hint').textContent = `Hint: ${words[currentWord].hint}`;
+            document.getElementById('hint').classList.remove('hidden', 'text-red-500');
+            document.getElementById('score').textContent = score;
+        }
+
+        function skipWord() {
+            results.push({ word: words[currentWord].word, guess: 'Skipped', hintUsed, status: 'Skipped', points: 0 });
+            currentWord++;
+            if (currentWord < words.length) {
+                loadWord();
+            } else {
+                showSummary();
+            }
+        }
+
+        function showSummary() {
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('summaryScreen').classList.remove('hidden');
+            const summary = document.getElementById('summary');
+            summary.innerHTML = `
+                <p class="font-semibold text-xl">Final Score: ${score}/50</p>
+                <p class="mt-4 font-semibold">Results:</p>
+                <ul class="list-disc pl-5">
+                    ${results.map(r => `
+                        <li class="my-2">
+                            Scrambled: ${scrambleWord(r.word)}<br>
+                            <span class="${r.status === 'Correct' ? 'text-green-500' : 'text-red-500'}">Your Guess: ${r.guess}</span><br>
+                            Correct Word: ${r.word}<br>
+                            ${r.hintUsed ? 'Hint Used: Yes (-3 points)<br>' : ''}
+                            Points: ${r.points}
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+
+            if (score >= 40) {
+                confetti({
+                    particleCount: 250,
+                    spread: 120,
+                    origin: { y: 0.6 },
+                    colors: ['#10b981', '#06b6d4', '#7c3aed']
+                });
+            }
+        }
+
+        // Handle Enter key for guess submission
+        document.getElementById('guessInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkGuess();
+            }
+        });
+
+        // Start the game
+        startNewGame();
+    </script>
+</body>
+</html>

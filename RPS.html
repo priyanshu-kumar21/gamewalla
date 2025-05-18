@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rock Paper Scissors</title>
+  <link rel="stylesheet" href="RPS.css" />
+</head>
+<body>
+  <h1>Rock Paper Scissors</h1>
+
+  <div class="game-container">
+    <div class="choices">
+      <button class="choice">✊</button>
+      <button class="choice">🖐️</button>
+      <button class="choice">✌️</button>
+    </div>
+
+    <div class="arena">
+      <div class="side player">
+        <p>You</p>
+        <div id="playerChoice" class="icon-area">❔</div>
+      </div>
+
+      <div class="vs">VS</div>
+
+      <div class="side computer">
+        <p>Computer</p>
+        <div id="computerChoice" class="icon-area">❔</div>
+      </div>
+    </div>
+
+    <h2 id="outcome">Make your move!</h2>
+
+    <div class="scoreboard">
+      Won = <span id="winCount">0</span> |
+      Lost = <span id="loseCount">0</span> |
+      Draw = <span id="drawCount">0</span>
+    </div>
+  </div>
+
+  <!-- Sound effects -->
+  <audio id="winSound" src="win.mp3"></audio>
+  <audio id="loseSound" src="lose.mp3"></audio>
+  <audio id="drawSound" src="draw.mp3"></audio>
+
+  <script src="RPS.js"></script>
+</body>
+</html>
